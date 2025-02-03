@@ -78,7 +78,7 @@ def Show2Dimg(img, title='CSC occupancy', help=False):
     # Set CMS style
     hep.style.use("ROOT")
 
-    fig = plt.figure(figsize =(8, 8))
+    fig = plt.figure(figsize =(6, 5))
     img_temp = copy.deepcopy(img)
     
     max_ = np.max(img_temp)
@@ -94,7 +94,7 @@ def Show2Dimg(img, title='CSC occupancy', help=False):
     plt.tick_params(axis='both', labelsize=16) 
     
     plt.title(title)
-
+    plt.tight_layout()
     plt.show()
     del img_temp
     
@@ -145,7 +145,7 @@ def Show2DLoss(img, vmin=-1.5, vmax=2., title='Loss', help=False):
 
     hep.style.use("ROOT")
 
-    fig = plt.figure(figsize =(8, 8))
+    fig = plt.figure(figsize =(6, 5))
     img_temp = copy.deepcopy(img)
     
     max_ = np.max(img_temp)
@@ -163,22 +163,10 @@ def Show2DLoss(img, vmin=-1.5, vmax=2., title='Loss', help=False):
     plt.tick_params(axis='both', labelsize=16) 
     
     plt.title(title)
-
+    plt.tight_layout()
     plt.show()
     del img_temp
 
-def Show2DLoss_old(img, vmin=-1.5, vmax=2., title='Loss'):
-    fig = plt.figure(figsize =(8, 8))
-    img_temp = copy.deepcopy(img)
-    cmap = plt.cm.seismic
-    cmap.set_bad(color='black')
-    img_temp[img_temp==0] = np.nan
-    plt.imshow(img_temp, cmap=cmap, vmin=vmin, vmax=vmax)
-    plt.colorbar()
-    plt.gca().invert_yaxis()
-    plt.title(title)
-    plt.show()
-    del img_temp
 
 def rebin_image(image, binary_matrix, help=False):
     """
@@ -234,33 +222,96 @@ def rebin_image(image, binary_matrix, help=False):
 
 def plot_LSs(monitoring_elements, run, ls, help=False):
     """
-    to do
+    Plots multiple 2D histograms for different Luminosity Sections (LS).
+    
+    Parameters:
+    - `monitoring_elements`: DataFrame containing monitoring data.
+    - `run`: Run number to filter the data.
+    - `ls`: Tuple (ls_min, ls_max) defining the LS range.
+    - `help`: If True, returns the documentation of Show2Dimg.
     """
     if help:
         return Show2Dimg.__doc__
     
-    df_temp = monitoring_elements[(monitoring_elements["run_number"]==run) & (monitoring_elements["ls_number"]>ls[0]) & (monitoring_elements["ls_number"]<ls[1])]
-    df_temp = df_temp.reset_index()
+    df_temp = monitoring_elements[
+        (monitoring_elements["run_number"] == run) & 
+        (monitoring_elements["ls_number"] > ls[0]) & 
+        (monitoring_elements["ls_number"] < ls[1])
+    ].reset_index()
     
-    fig, axes = plt.subplots(math.ceil(len(df_temp)/4), 4, figsize=(16, math.ceil(len(df_temp)/4)*4))
-    
-    i=0
-    for ax in axes.flatten():
-        plt.sca(ax) 
-        if i< len(df_temp):
-            hep.style.use("ROOT")
-            img_temp = copy.deepcopy(np.array([np.array(v) for v in df_temp["data"][i]], dtype=np.float64))
-            max_ = np.max(img_temp)
-            img_temp[img_temp == 0] = np.nan
-            img_temp = img_temp.T 
+    num_plots = len(df_temp)
+    num_rows = math.ceil(num_plots / 4)
+
+    fig, axes = plt.subplots(num_rows, 4, figsize=(16, num_rows * 4))
+    axes = axes.flatten()  # Ensure axes is a 1D array for iteration
+
+    hep.style.use("ROOT")
+
+    for i, ax in enumerate(axes):
+        if i < num_plots:
+            plt.sca(ax)  # Set the current axis
+            
+            # Convert data column to numpy array
+            img_temp = np.array([np.array(v) for v in df_temp["data"][i]], dtype=np.float64)
+            img_temp[img_temp == 0] = np.nan  # Replace zeros with NaNs
+            img_temp = img_temp.T  # Transpose to match expected orientation
+            
+            # Define bin edges
             ybins = np.arange(img_temp.shape[0] + 1)
             xbins = np.arange(img_temp.shape[1] + 1)
+            
+            # Suppress stdout output from hep.hist2dplot
             with contextlib.redirect_stdout(io.StringIO()):
                 hep.hist2dplot(img_temp, xbins, ybins, cbarsize="5%", flow=False)
 
-            del img_temp
-            ax.set_title(f"LS {ls[0]+i}")
-        ax.axis('off')
-        i=i+1
+            ax.set_title(f"LS {ls[0] + i}")  # Set title for each LS plot
+        ax.axis('off')  
 
+    plt.tight_layout()  # Improve subplot spacing
+    plt.show()
+    
+def show_img_reco_Loss(v1, v2, v3, id, vmin=-1.5, vmax=2.0, help=False):
+    """
+    Displays three side-by-side images: Img, Reco, and Loss.
+    - `v1`, `v2`, `v3`: arrays containing the images.
+    - `id`: index of the image to display.
+    - `vmin`, `vmax`: limits for the Loss visualization.
+    - `help`: if True, returns the documentation of Show2Dimg.
+    """
+    if help:
+        return Show2Dimg.__doc__
+
+    hep.style.use("ROOT")
+
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+    imgs_ = [v1[id], v2[id], v3[id]]
+    titles = ["Img", "Reco", "Loss"]
+
+    for i, ax in enumerate(axes.flatten()):
+        plt.sca(ax)  # Set current axis
+        
+        img_temp = np.copy(imgs_[i])  # Create a copy to avoid modifying the original data
+        
+        if i == 2:  # Apply limits only for the Loss image
+            img_temp = np.clip(img_temp, vmin, vmax)
+
+        img_temp[img_temp == 0] = np.nan  # Set zero values to NaN for better visualization
+        img_temp = img_temp.T  # Transpose to match expected orientation
+
+        # Define bin edges
+        ybins = np.arange(img_temp.shape[0] + 1)
+        xbins = np.arange(img_temp.shape[1] + 1)
+
+        # Suppress stdout output from hep.hist2dplot
+        with contextlib.redirect_stdout(io.StringIO()):
+            if i==2:
+                hep.hist2dplot(img_temp, xbins, ybins, cbarsize="5%", cmin=vmin, cmax=vmax, flow=False)
+            else:
+                hep.hist2dplot(img_temp, xbins, ybins, cbarsize="5%", flow=False)
+
+        ax.set_title(titles[i])  # Set subplot title
+        ax.axis('off')
+        
+        del img_temp
+    plt.tight_layout()
     plt.show()
